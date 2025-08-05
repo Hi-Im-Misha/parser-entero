@@ -2,24 +2,39 @@ import requests
 from bs4 import BeautifulSoup
 from headers import get_random_headers
 import re
+import time
+from headers import get_random_headers, get_cookies
+import os
 
-def parse_product(url_list):
+def parse_product(url_list, title):
+    safe_title = "".join(c if c.isalnum() or c in " _-" else "_" for c in title).strip()
+
+    BASE_FOLDER = os.path.join('products', safe_title)
+    PHOTOS_FOLDER = os.path.join(BASE_FOLDER, 'photos')
+    os.makedirs(PHOTOS_FOLDER, exist_ok=True)
+
+    headers = get_random_headers()
+    cookies = get_cookies()
+    
     all_data = []
 
     for full_link in url_list:
-        header = get_random_headers()
-        response = requests.get(full_link, headers=header)
+        response = requests.get(full_link, headers=headers, cookies=cookies)
         
+        time.sleep(1)
         if response.status_code != 200:
-            print(f"[!] Ошибка при загрузке товара: {full_link}")
+            print(f"Ошибка при загрузке товара: {full_link}")
             continue
-
+        
+        time.sleep(1)
+        
         soup = BeautifulSoup(response.text, 'html.parser')
         data = {}
 
         # Заголовок
         title_tag = soup.find('h1', class_='navi')
         data['Заголовок'] = title_tag.get_text(strip=True) if title_tag else 'Нет данных на сайте'
+
 
         # Код товара
         data['Код товара'] = 'Нет данных на сайте'
@@ -28,6 +43,7 @@ def parse_product(url_list):
             sku_tag = code_tag.find('b', itemprop='sku')
             if sku_tag:
                 data['Код товара'] = sku_tag.get_text(strip=True)
+
 
         # Цена и Скидка
         data['Цена'] = 'Нет данных на сайте'
@@ -41,6 +57,50 @@ def parse_product(url_list):
             if len(prices) > 1:
                 price_text = prices[1].get_text()
                 data['Скидка'] = int(''.join(re.findall(r'\d+', price_text)))
+
+
+
+        data['Ссылки на фото'] = 'Нет данных на сайте'
+        image_urls = []
+
+        photo_block = soup.find('ul', class_='product-card-gallery-thumbs-list')
+        if photo_block:
+            photo_links = photo_block.find_all('a', href=True)
+            image_urls = ['https:' + a['href'] for a in photo_links]
+
+        if not image_urls:
+            main_image_div = soup.find('div', class_='product-card-gallery-image-container')
+            if main_image_div:
+                main_img = main_image_div.find('img', src=True)
+                if main_img:
+                    image_urls = ['https:' + main_img['src']]
+
+        # Сохраняем ссылки
+        if image_urls:
+            data['Ссылки на фото'] = '\n'.join(image_urls)
+
+            # Создаём папку для фото
+            raw_title = data.get('Заголовок', 'unknown')
+            safe_title = re.sub(r'[^\w\-_\. ]', '_', raw_title)[:50]
+            folder_name = os.path.join(PHOTOS_FOLDER, f'{safe_title.strip().replace(" ", "_")}')
+            os.makedirs(folder_name, exist_ok=True)
+            data['Папка с фото'] = folder_name
+
+
+            for idx, img_url in enumerate(image_urls, start=1):
+                try:
+                    img_response = requests.get(img_url, headers=headers, cookies=cookies, timeout=10)
+                    if img_response.status_code == 200:
+                        ext = os.path.splitext(img_url)[1] or ".jpg"
+                        img_path = os.path.join(folder_name, f'image_{idx}{ext}')
+                        with open(img_path, 'wb') as f:
+                            f.write(img_response.content)
+                    else:
+                        print(f"[!] Не удалось скачать изображение: {img_url}")
+                except Exception as e:
+                    print(f"[!] Ошибка при скачивании изображения: {img_url}\n{e}")
+
+
 
         # Основные характеристики
         characteristics = {}
@@ -90,7 +150,7 @@ def parse_product(url_list):
         else:
             data['Ссылка на документы'] = 'Нет данных на сайте'
 
-        print(f"[✓] Обработан: {full_link}")
+        print(f"Обработан: {full_link}")
         all_data.append(data)
 
     return all_data

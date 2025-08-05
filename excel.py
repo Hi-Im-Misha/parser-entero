@@ -1,13 +1,20 @@
 import openpyxl
+import os
 
-def save_to_excel(data_list, filename='products.xlsx'):
+def save_to_excel(data_list, title):
+    safe_title = "".join(c if c.isalnum() or c in " _-" else "_" for c in title).strip()
+
+    folder_path = os.path.join("products", safe_title)
+    filename = os.path.join(folder_path, f"{safe_title}.xlsx")
+
+    os.makedirs(folder_path, exist_ok=True)
+
     workbook = openpyxl.Workbook()
     sheet = workbook.active
     sheet.title = "Товары"
 
-    # Заголовки — берём из первого элемента словаря
     if not data_list:
-        print("[!] Список данных пустой")
+        print("Список данных пустой")
         return
 
     headers = list(data_list[0].keys())
@@ -18,4 +25,4 @@ def save_to_excel(data_list, filename='products.xlsx'):
         sheet.append(row)
 
     workbook.save(filename)
-    print(f"[✓] Excel сохранён: {filename}")
+    print(f"Excel сохранён: {filename}")
