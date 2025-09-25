@@ -18,7 +18,7 @@
 
 1. Клонируйте репозиторий:  
    ```bash
-   git clone https://github.com/Hi-Im-Misha/parser-entero/tree/master
+   git clone https://github.com/Hi-Im-Misha/parser-entero.git
 2. Установить зависимости:
     ```bash
     pip install -r requirements.txt
